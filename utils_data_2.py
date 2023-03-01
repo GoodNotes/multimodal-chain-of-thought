@@ -12,22 +12,34 @@ img_shape = {
 
 
 class ScienceQAInputEncoder:
-    def __init__(self, tokenizer, args):
+    def __init__(
+            self,
+            tokenizer,
+            prompt_format,
+            use_caption,
+            options,
+            input_len,
+            img_type
+    ):
         self.tokenizer = tokenizer
-        self.args = args
+        self.prompt_format = prompt_format
+        self.use_caption = use_caption
+        self.options = options
+        self.input_len = input_len
+        self.img_type = img_type
 
     def encode_input(self, problem: Problem, le_data=None):
         source_text = build_model_input(
             problem,
-            prompt_format=self.args.prompt_format,
-            use_caption=self.args.use_caption,
-            options_format=self.args.options,
+            prompt_format=self.prompt_format,
+            use_caption=self.use_caption,
+            options_format=self.options,
             le_data=le_data
         )
 
         source = self.tokenizer.batch_encode_plus(
             [source_text],
-            max_length=self.args.input_len,
+            max_length=self.input_len,
             pad_to_max_length=True,
             truncation=True,
             padding="max_length",
@@ -37,7 +49,7 @@ class ScienceQAInputEncoder:
         source_mask = source["attention_mask"].squeeze()
 
         if not problem.image:
-            shape = img_shape[self.args.img_type]
+            shape = img_shape[self.img_type]
             image = np.zeros(shape)
         else:
             image = problem.image

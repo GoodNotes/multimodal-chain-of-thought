@@ -4,11 +4,12 @@ Adapted from https://github.com/huggingface/transformers
 
 from transformers import T5Config, T5ForConditionalGeneration
 from transformers.models.t5.modeling_t5 import T5Stack, __HEAD_MASK_WARNING_MSG, T5EncoderModel
+from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+from transformers.utils import ModelOutput
 import copy
-import math
 import os
 import warnings
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict, Any
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
@@ -16,6 +17,7 @@ from transformers.modeling_outputs import (
     BaseModelOutput,
     Seq2SeqLMOutput,
 )
+
 
 class T5ForMultimodalGeneration(T5ForConditionalGeneration):
     _keys_to_ignore_on_load_missing = [
@@ -112,9 +114,8 @@ class T5ForMultimodalGeneration(T5ForConditionalGeneration):
                 attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
             )
 
-
         hidden_states = encoder_outputs[0]
-        
+
         image_embedding = self.image_dense(image_ids)
         image_att, _ = self.mha_layer(hidden_states, image_embedding, image_embedding)
 
@@ -192,3 +193,72 @@ class T5ForMultimodalGeneration(T5ForConditionalGeneration):
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
         )
+
+    def _prepare_encoder_decoder_kwargs_for_generation(
+        self, inputs_tensor: torch.Tensor, model_kwargs, model_input_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        # 1. get encoder
+        encoder = self.get_encoder()
+
+        # 2. prepare encoder args and encoder kwargs from model kwargs
+        irrelevant_prefix = ["decoder_", "cross_attn", "use_cache"]
+        encoder_kwargs = {
+            argument: value
+            for argument, value in model_kwargs.items()
+            if not any(argument.startswith(p) for p in irrelevant_prefix)
+        }
+
+        # 3. make sure that encoder returns `ModelOutput`
+        model_input_name = model_input_name if model_input_name is not None else self.main_input_name
+        encoder_kwargs["return_dict"] = True
+        encoder_kwargs[model_input_name] = inputs_tensor
+
+        # My modifications here:
+        image_ids = encoder_kwargs.pop('image_ids')
+        encoder_outputs = encoder(**encoder_kwargs)
+
+        hidden_states = encoder_outputs[0]
+        image_embedding = self.image_dense(image_ids)
+        image_att, _ = self.mha_layer(hidden_states, image_embedding, image_embedding)
+
+        merge = torch.cat([hidden_states, image_att], dim=-1)
+        gate = self.sigmoid(self.gate_dense(merge))
+        hidden_states = (1 - gate) * hidden_states + gate * image_att
+
+        model_kwargs["encoder_outputs"]: ModelOutput = BaseModelOutputWithPastAndCrossAttentions(
+            last_hidden_state=hidden_states,
+            past_key_values=encoder_outputs.past_key_values,
+            hidden_states=encoder_outputs.hidden_states,
+            attentions=encoder_outputs.attentions,
+            cross_attentions=encoder_outputs.cross_attentions
+        )
+
+        return model_kwargs
+
+    def prepare_inputs_for_generation(
+        self,
+        input_ids,
+        past=None,
+        attention_mask=None,
+        head_mask=None,
+        decoder_head_mask=None,
+        cross_attn_head_mask=None,
+        use_cache=None,
+        encoder_outputs=None,
+        **kwargs
+    ):
+        # cut decoder_input_ids if past is used
+        if past is not None:
+            input_ids = input_ids[:, -1:]
+
+        return {
+            "image_ids": kwargs['image_ids'],
+            "decoder_input_ids": input_ids,
+            "past_key_values": past,
+            "encoder_outputs": encoder_outputs,
+            "attention_mask": attention_mask,
+            "head_mask": head_mask,
+            "decoder_head_mask": decoder_head_mask,
+            "cross_attn_head_mask": cross_attn_head_mask,
+            "use_cache": use_cache,
+        }

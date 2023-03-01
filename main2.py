@@ -34,7 +34,14 @@ def predict_explanation(problem, args) -> str:
     patch_size = img_shape[args.img_type]
     padding_idx = tokenizer._convert_token_to_id(tokenizer.pad_token)
 
-    input_encoder = ScienceQAInputEncoder(tokenizer, args)
+    input_encoder = ScienceQAInputEncoder(
+        tokenizer,
+        args.prompt_format,
+        args.use_caption,
+        args.options,
+        args.input_len,
+        args.img_type
+    )
     model = T5ForMultimodalGeneration.from_pretrained(
         args.model_1,
         patch_size=patch_size,
@@ -57,7 +64,14 @@ def predict_answer(problem, args) -> str:
     patch_size = img_shape[args.img_type]
     padding_idx = tokenizer._convert_token_to_id(tokenizer.pad_token)
 
-    input_encoder = ScienceQAInputEncoder(tokenizer, args)
+    input_encoder = ScienceQAInputEncoder(
+        tokenizer,
+        args.prompt_format,
+        args.use_caption,
+        args.options,
+        args.input_len,
+        args.img_type
+    )
     model = T5ForMultimodalGeneration.from_pretrained(
         args.model_2,
         patch_size=patch_size,
