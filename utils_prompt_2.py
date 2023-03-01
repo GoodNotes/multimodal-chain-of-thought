@@ -7,7 +7,6 @@ class Problem(BaseModel):
     hint: Optional[str] = None
     caption: Optional[str] = None
     choices: List[str]
-    lecture: Optional[str] = None
     solution: Optional[str] = None
     image: Optional[Any] = None
 
