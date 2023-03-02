@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from typing import Optional
 
 from utils_prompt_2 import Problem, build_model_input
 
@@ -19,7 +20,8 @@ class ScienceQAInputEncoder:
             use_caption,
             options,
             input_len,
-            img_type
+            img_type,
+            detr_model
     ):
         self.tokenizer = tokenizer
         self.prompt_format = prompt_format
@@ -27,8 +29,9 @@ class ScienceQAInputEncoder:
         self.options = options
         self.input_len = input_len
         self.img_type = img_type
+        self.detr_model = detr_model
 
-    def encode_input(self, problem: Problem, le_data=None):
+    def encode_input(self, problem: Problem, image_path: Optional[str] = None, le_data=None):
         source_text = build_model_input(
             problem,
             prompt_format=self.prompt_format,
@@ -48,11 +51,11 @@ class ScienceQAInputEncoder:
         source_ids = source["input_ids"].squeeze()
         source_mask = source["attention_mask"].squeeze()
 
-        if not problem.image:
+        if not image_path:
             shape = img_shape[self.img_type]
             image = np.zeros(shape)
         else:
-            image = problem.image
+            image = self.detr_model.get_features(image_path)
 
         image_ids = torch.tensor(image, dtype=torch.float32).squeeze()
 

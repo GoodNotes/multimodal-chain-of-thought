@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional, List
 
 
 class Problem(BaseModel):
@@ -8,7 +8,6 @@ class Problem(BaseModel):
     caption: Optional[str] = None
     choices: List[str]
     solution: Optional[str] = None
-    image: Optional[Any] = None
 
 
 class QCMInput(BaseModel):
